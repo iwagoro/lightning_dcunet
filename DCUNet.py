@@ -13,6 +13,7 @@ class DCUnet10(LightningModule):
     """
     def __init__(self, n_fft=64, hop_length=16):
         super().__init__()
+        
         self.save_hyperparameters()
         # for istft
         self.n_fft = n_fft
@@ -76,7 +77,7 @@ class DCUnet10(LightningModule):
         x, y = batch
         pred = self.forward(x)
         loss = wsdr_fn(x,pred,y)
-        self.log("train_loss", loss, prog_bar=True)
+        self.log("train_loss", loss, prog_bar=True,sync_dist=True)
         return loss
 
     def validation_step(self,batch):
@@ -86,7 +87,7 @@ class DCUnet10(LightningModule):
         x,y = batch
         pred = self.forward(x)
         loss = wsdr_fn(x,pred,y)
-        self.log("train_loss", loss, prog_bar=True)
+        self.log("train_loss", loss, prog_bar=True,sync_dist=True)
         pred = pred[0].unsqueeze(0)
         noisy =torch.view_as_complex(x[0])
         clean = torch.view_as_complex(y[0])
@@ -94,7 +95,7 @@ class DCUnet10(LightningModule):
         clean = torch.istft(clean ,n_fft=N_FFT, hop_length=HOP_LENGTH, normalized=True,window=window)
         window = torch.hann_window(N_FFT,device=noisy.device)
         noisy =torch.istft(noisy ,n_fft=N_FFT, hop_length=HOP_LENGTH, normalized=True,window=window)
-        self.log("val_loss", loss)
+        self.log("val_loss", loss, prog_bar=True,sync_dist=True)
         self.logger.experiment.add_audio("pred", pred,  sample_rate=48000)
         self.logger.experiment.add_audio("noisy", noisy,  sample_rate=48000)
         self.logger.experiment.add_audio("clean", clean,  sample_rate=48000)
