@@ -30,8 +30,8 @@ test_clean_files = sorted(list(clean_test_dir.rglob('*.wav')))
 
 trainset = SpeechDataset(train_noisy_files,train_clean_files,N_FFT,HOP_LENGTH)
 testset = SpeechDataset(test_noisy_files,test_clean_files,N_FFT,HOP_LENGTH)
-train_loader = torch.utils.data.DataLoader(trainset, batch_size=2, shuffle=True,num_workers=2)
-test_loader = torch.utils.data.DataLoader(testset, batch_size=2, shuffle=False,num_workers=2)
+train_loader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True,num_workers=2)
+test_loader = torch.utils.data.DataLoader(testset, batch_size=64, shuffle=False,num_workers=2)
 
 ################################################################################################################
 
@@ -53,13 +53,11 @@ progress_bar = RichProgressBar(
 model = DCUnet10(n_fft=N_FFT,hop_length=HOP_LENGTH)
 trainer = Trainer(
     accelerator="gpu",
-    callbacks=[progress_bar],
+    callbacks=[EarlyStopping(monitor="val_loss", mode="min"),progress_bar],
     logger=logger,
     max_epochs=20,
     strategy=strategy,
-    devices=2,
+    devices=8,
 )
-trainer.fit(model, train_loader)  
-# print(testset[0][1].shape)
 
-# summary(DCUnet10(N_FFT,HOP_LENGTH),(32,1,1539,214,2))
+trainer.fit(model, train_loader,test_loader)

@@ -3,6 +3,7 @@ import torch
 from Encoder import Encoder
 from Decoder import Decoder 
 from loss import wsdr_fn
+from metrics import getPesqList,getSNRList
 # from loss import basic_loss
 
 
@@ -10,6 +11,9 @@ from loss import wsdr_fn
 class DCUnet10(LightningModule):
     def __init__(self, n_fft, hop_length):
         super().__init__()
+        
+        self.pesq_scores = []
+        self.snr_scores = []
         
         self.n_fft = n_fft
         self.hop_length = hop_length
@@ -67,8 +71,28 @@ class DCUnet10(LightningModule):
         self.log("train_loss", loss, prog_bar=True,sync_dist=True)
         return loss
     
-    def predict_step(self, batch):
-        return self(batch)
+    def validation_step(self,batch):
+        x,y = batch
+        pred = self.forward(x)
+        loss = wsdr_fn(x,pred,y,self.n_fft,self.hop_length)
+        self.log("val_loss", loss, prog_bar=True,sync_dist=True)
+        return loss
+    
+    def prediction_step(self,batch):
+        x,y = batch
+        pred = self.forward(x)
+        pesq = getSNRList(pred,y)
+        snr = getPesqList(pred,x)
+        
+        self.pesq_scores.append(pesq)
+        self.snr_scores.append(snr)
+        
+    def on_predict_batch_end(self):
+        average_pesq = sum(self.pesq_scores) / len(self.pesq_scores)
+        average_snr = sum(self.snr_scores) / len(self.snr_scores)
+        
+        print(f"pesq :{average_pesq}")
+        print(f"snr : {average_snr}")
     
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=1e-4)
