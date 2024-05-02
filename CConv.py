@@ -1,7 +1,5 @@
 import torch.nn as nn
 import torch
-from DConv import DConv2d
-from SubPixel import SPConvTranspose2d
 
 class CConv2d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding=0):
@@ -24,18 +22,6 @@ class CConv2d(nn.Module):
                                  kernel_size=self.kernel_size, 
                                  padding=self.padding, 
                                  stride=self.stride)
-        
-        # self.real_conv = DConv2d(in_channels=self.in_channels, 
-        #                            out_channels=self.out_channels, 
-        #                            kernel_size=self.kernel_size, 
-        #                            padding=self.padding, 
-        #                            stride=self.stride)
-        
-        # self.im_conv = DConv2d(in_channels=self.in_channels, 
-                                #  out_channels=self.out_channels, 
-                                #  kernel_size=self.kernel_size, 
-                                #  padding=self.padding, 
-                                #  stride=self.stride)
         
         nn.init.xavier_uniform_(self.real_conv.weight)
         nn.init.xavier_uniform_(self.im_conv.weight)

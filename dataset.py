@@ -2,21 +2,22 @@ import torchaudio
 import torch
 from torch.utils.data import Dataset
 import numpy as np
+from stft import stft, istft
 
-def subsample2(wav):
-    channel,length = wav.shape
-    length = length  // 2 - 128
-    wav1,wav2 = torch.zeros([channel,length]),torch.zeros([channel,length])
-    for channel in range(channel):
-        for i in range(length):
-            random = np.random.choice([0,1])
-            index = i * 2 - 127
-            if random == 0:
-                wav1[channel, i], wav2[channel, i] = wav[channel, index], wav[channel, index+1]
-            elif random == 1:
-                wav1[channel, i], wav2[channel, i] = wav[channel, index+1], wav[channel, index]
+# def subsample2(wav):
+#     channel,length = wav.shape
+#     length = length  // 2 - 128
+#     wav1,wav2 = torch.zeros([channel,length]),torch.zeros([channel,length])
+#     for channel in range(channel):
+#         for i in range(length):
+#             random = np.random.choice([0,1])
+#             index = i * 2 - 127
+#             if random == 0:
+#                 wav1[channel, i], wav2[channel, i] = wav[channel, index], wav[channel, index+1]
+#             elif random == 1:
+#                 wav1[channel, i], wav2[channel, i] = wav[channel, index+1], wav[channel, index]
     
-    return wav1,wav2
+#     return wav1,wav2
 
 class SpeechDataset(Dataset):
     
@@ -53,20 +54,10 @@ class SpeechDataset(Dataset):
         
         # Short-time Fourier transform
         
-        # window = torch.hann_window(self.n_fft,device=x_clean.device)
-        # x_noisy_stft = torch.stft(input=x_noisy, n_fft=self.n_fft, 
-        #                           hop_length=self.hop_length, normalized=True,return_complex=True,window=window)
-        # x_noisy_stft = torch.view_as_real(x_noisy_stft)
-        # x_clean_stft = torch.stft(input=x_clean, n_fft=self.n_fft, 
-        #                           hop_length=self.hop_length, normalized=True,return_complex=True,window=window)
-        # x_clean_stft = torch.view_as_real(x_clean_stft)
+        x_noisy_stft = stft(x_noisy, self.n_fft, self.hop_length)
+        x_clean_stft = stft(x_clean, self.n_fft, self.hop_length)
         
-        sampled1,sampled2 = subsample2(x_clean)
-        window = torch.hann_window(self.n_fft,device=sampled1.device)
-        sampled_stft = torch.stft(input=sampled1, n_fft=self.n_fft,  hop_length=self.hop_length, normalized=True,return_complex=True,window=window)
-        sampled_stft = torch.view_as_real(sampled_stft)
-        # return x_noisy_stft, x_clean_stft
-        return sampled1, sampled2 ,sampled_stft
+        return x_noisy_stft, x_clean_stft
         
     def _prepare_sample(self, waveform):
         current_len = waveform.shape[1]  # オーディオデータの現在の長さを取得
