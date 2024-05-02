@@ -24,8 +24,8 @@ class DCUnet10(LightningModule):
         
         # upsampling/decoding
         self.upsample0 = Decoder(filter_size=(5,3), stride_size=(2,1), in_channels=90, out_channels=90)
-        self.upsample1 = Decoder(filter_size=(6,4), stride_size=(2,2), in_channels=180, out_channels=90)
-        self.upsample2 = Decoder(filter_size=(5,4), stride_size=(2,2), in_channels=180, out_channels=90)
+        self.upsample1 = Decoder(filter_size=(5,3), stride_size=(2,2), in_channels=180, out_channels=90)
+        self.upsample2 = Decoder(filter_size=(5,3), stride_size=(2,2), in_channels=180, out_channels=90)
         self.upsample3 = Decoder(filter_size=(7,5), stride_size=(2,2), in_channels=180, out_channels=45)
         self.upsample4 = Decoder(filter_size=(7,5), stride_size=(2,2), in_channels=90, output_padding=(0,1),
                                  out_channels=1, last_layer=True)
