@@ -5,12 +5,12 @@ from Decoder import Decoder
 from wsdr import wsdr_fn
 from rich.progress import Progress
 import torchaudio
+from pypesq import pesq
+# from loss import basic_loss
+
 
 
 class DCUnet10(LightningModule):
-    """
-    Deep Complex U-Net class of the model.
-    """
     def __init__(self, n_fft=64, hop_length=16):
         super().__init__()
         
@@ -28,8 +28,8 @@ class DCUnet10(LightningModule):
         
         # upsampling/decoding
         self.upsample0 = Decoder(filter_size=(5,3), stride_size=(2,1), in_channels=90, out_channels=90)
-        self.upsample1 = Decoder(filter_size=(5,3), stride_size=(2,2), in_channels=180, out_channels=90)
-        self.upsample2 = Decoder(filter_size=(5,3), stride_size=(2,2), in_channels=180, out_channels=90)
+        self.upsample1 = Decoder(filter_size=(6,4), stride_size=(2,2), in_channels=180, out_channels=90)
+        self.upsample2 = Decoder(filter_size=(5,4), stride_size=(2,2), in_channels=180, out_channels=90)
         self.upsample3 = Decoder(filter_size=(7,5), stride_size=(2,2), in_channels=180, out_channels=45)
         self.upsample4 = Decoder(filter_size=(7,5), stride_size=(2,2), in_channels=90, output_padding=(0,1),
                                  out_channels=1, last_layer=True)
@@ -45,7 +45,7 @@ class DCUnet10(LightningModule):
         
         # upsampling/decoding 
         u0 = self.upsample0(d4)
-        # skip-connection
+        # # skip-connection
         c0 = torch.cat((u0, d3), dim=1)
         
         u1 = self.upsample1(c0)
@@ -61,44 +61,55 @@ class DCUnet10(LightningModule):
         
         # u4 - the mask
         output = u4 * x
-        if is_istft:
-            SAMPLE_RATE = 48000
-            N_FFT = SAMPLE_RATE * 64 // 1000 + 4
-            HOP_LENGTH = SAMPLE_RATE * 16 // 1000 + 4
-            output = torch.squeeze(output, 1)
-            output = torch.view_as_complex(output)
-            window = torch.hann_window(N_FFT,device=output.device)
-            output = torch.istft(output, n_fft=N_FFT, hop_length=HOP_LENGTH, normalized=True,window=window)
+        # if is_istft:
+        #     SAMPLE_RATE = 48000
+        #     N_FFT = 1022
+        #     HOP_LENGTH = 256
+        #     output = torch.squeeze(output, 1)
+        #     output = torch.view_as_complex(output)
+        #     window = torch.hann_window(N_FFT,device=output.device)
+        #     output = torch.istft(output, n_fft=N_FFT, hop_length=HOP_LENGTH, normalized=True,window=window)
         
         return output
     
-    
     def training_step(self, batch, batch_idx):
-        x, y = batch
-        pred = self.forward(x)
+        x,y,stft = batch
+        pred = self.forward(stft)
         loss = wsdr_fn(x,pred,y)
+        # loss = basic_loss()
         self.log("train_loss", loss, prog_bar=True,sync_dist=True)
         return loss
 
-    def validation_step(self,batch):
-        SAMPLE_RATE = 48000
-        N_FFT = SAMPLE_RATE * 64 // 1000 + 4
-        HOP_LENGTH = SAMPLE_RATE * 16 // 1000 + 4
-        x,y = batch
-        pred = self.forward(x)
-        loss = wsdr_fn(x,pred,y)
-        self.log("train_loss", loss, prog_bar=True,sync_dist=True)
-        pred = pred[0].unsqueeze(0)
-        noisy =torch.view_as_complex(x[0])
-        clean = torch.view_as_complex(y[0])
-        window = torch.hann_window(N_FFT,device=clean.device)
-        clean = torch.istft(clean ,n_fft=N_FFT, hop_length=HOP_LENGTH, normalized=True,window=window)
-        window = torch.hann_window(N_FFT,device=noisy.device)
-        noisy =torch.istft(noisy ,n_fft=N_FFT, hop_length=HOP_LENGTH, normalized=True,window=window)
-        self.log("val_loss", loss, prog_bar=True,sync_dist=True)
-        self.logger.experiment.add_audio("pred", pred,  sample_rate=48000)
-        self.logger.experiment.add_audio("noisy", noisy,  sample_rate=48000)
-        self.logger.experiment.add_audio("clean", clean,  sample_rate=48000)
+    # def validation_step(self, batch):
+    #     SAMPLE_RATE = 48000
+    #     N_FFT = SAMPLE_RATE * 64 // 1000 + 4
+    #     HOP_LENGTH = SAMPLE_RATE * 16 // 1000 + 4
+    #     x, y = batch
+    #     pred = self.forward(x)
+    #     loss = wsdr_fn(x, pred, y)
+    #     self.log("train_loss", loss, prog_bar=True, sync_dist=True)
+    #     pred = pred[0].unsqueeze(0)
+    #     noisy = torch.view_as_complex(x[0])
+    #     clean = torch.view_as_complex(y[0])
+    #     window = torch.hann_window(N_FFT, device=clean.device)
+    #     clean = torch.istft(clean, n_fft=N_FFT, hop_length=HOP_LENGTH, normalized=True, window=window)
+    #     window = torch.hann_window(N_FFT, device=noisy.device)
+    #     noisy = torch.istft(noisy, n_fft=N_FFT, hop_length=HOP_LENGTH, normalized=True, window=window)
+    #     self.log("val_loss", loss, prog_bar=True, sync_dist=True)
+    #     self.logger.experiment.add_audio("pred", pred, sample_rate=48000)
+    #     self.logger.experiment.add_audio("noisy", noisy, sample_rate=48000)
+    #     self.logger.experiment.add_audio("clean", clean, sample_rate=48000)
+
+    #     clean = torchaudio.transforms.Resample(48000, 16000)(clean.detach().cpu())
+    #     pred= torchaudio.transforms.Resample(48000, 16000)(pred.detach().cpu())
+
+    #     # clean = clean.flatten().numpy()
+    #     # pred = pred.flatten().cpu().numpy() 
+    #     # Ensure the function call is correctly referencing the 'pesq' function from the 'pesq' module
+    #     pesq_score = pesq(clean.flatten(), pred.flatten(), 16000)
+    #     pesq_score /= len(batch)
+    #     self.log("pesq", pesq_score, prog_bar=True, sync_dist=True)
+
     
     
     def predict_step(self, batch):
@@ -106,4 +117,4 @@ class DCUnet10(LightningModule):
     
     
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=1e-3)
+        return torch.optim.Adam(self.parameters(), lr=1e-4)
