@@ -2,6 +2,22 @@ import torchaudio
 import torch
 from torch.utils.data import Dataset
 import numpy as np
+from stft import stft, istft
+
+# def subsample2(wav):
+#     channel,length = wav.shape
+#     length = length  // 2 - 128
+#     wav1,wav2 = torch.zeros([channel,length]),torch.zeros([channel,length])
+#     for channel in range(channel):
+#         for i in range(length):
+#             random = np.random.choice([0,1])
+#             index = i * 2 - 127
+#             if random == 0:
+#                 wav1[channel, i], wav2[channel, i] = wav[channel, index], wav[channel, index+1]
+#             elif random == 1:
+#                 wav1[channel, i], wav2[channel, i] = wav[channel, index+1], wav[channel, index]
+    
+#     return wav1,wav2
 
 class SpeechDataset(Dataset):
     
@@ -38,23 +54,19 @@ class SpeechDataset(Dataset):
         
         # Short-time Fourier transform
         
-        window = torch.hann_window(self.n_fft,device=x_clean.device)
-        x_noisy_stft = torch.stft(input=x_noisy, n_fft=self.n_fft, 
-                                  hop_length=self.hop_length, normalized=True,return_complex=True,window=window)
-        x_noisy_stft = torch.view_as_real(x_noisy_stft)
-        x_clean_stft = torch.stft(input=x_clean, n_fft=self.n_fft, 
-                                  hop_length=self.hop_length, normalized=True,return_complex=True,window=window)
-        x_clean_stft = torch.view_as_real(x_clean_stft)
+        x_noisy_stft = stft(x_noisy, self.n_fft, self.hop_length)
+        x_clean_stft = stft(x_clean, self.n_fft, self.hop_length)
         
         return x_noisy_stft, x_clean_stft
         
     def _prepare_sample(self, waveform):
-        waveform = waveform.numpy()
-        current_len = waveform.shape[1]
-        
-        output = np.zeros((1, self.max_len), dtype='float32')
-        output[0, -current_len:] = waveform[0, :self.max_len]
-        output = torch.from_numpy(output)
-        
+        current_len = waveform.shape[1]  # オーディオデータの現在の長さを取得
+    
+        # 出力テンソルをゼロで初期化
+        output = torch.zeros((1, self.max_len), dtype=torch.float32, device=waveform.device)
+        # 必要な部分のデータをコピー
+        output[0, -min(current_len, self.max_len):] = waveform[0, :min(current_len, self.max_len)]
+    
         return output
+
     

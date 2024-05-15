@@ -25,7 +25,7 @@ class Decoder(nn.Module):
         
         self.cbn = CBatchNorm2d(num_features=self.out_channels) 
         
-        self.leaky_relu = nn.LeakyReLU()
+        self.leaky_relu = nn.LeakyReLU()        
             
     def forward(self, x):
         

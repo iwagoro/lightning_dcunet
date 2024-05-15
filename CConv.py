@@ -1,6 +1,5 @@
 import torch.nn as nn
 import torch
-from DConv import depthwise_separable_conv
 
 class CConv2d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding=0):
