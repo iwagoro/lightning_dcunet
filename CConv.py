@@ -28,6 +28,8 @@ class CConv2d(nn.Module):
         
         
     def forward(self, x):
+        if isinstance(x, list):
+            x = torch.stack(x)
         x_real = x[..., 0]
         x_im = x[..., 1]
         
@@ -73,6 +75,8 @@ class CConvTranspose2d(nn.Module):
         
         
     def forward(self, x):
+        if isinstance(x, list):
+            x = torch.stack(x)
         x_real = x[..., 0]
         x_im = x[..., 1]
         

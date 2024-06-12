@@ -4,20 +4,20 @@ from torch.utils.data import Dataset
 import numpy as np
 from stft import stft, istft
 
-# def subsample2(wav):
-#     channel,length = wav.shape
-#     length = length  // 2 - 128
-#     wav1,wav2 = torch.zeros([channel,length]),torch.zeros([channel,length])
-#     for channel in range(channel):
-#         for i in range(length):
-#             random = np.random.choice([0,1])
-#             index = i * 2 - 127
-#             if random == 0:
-#                 wav1[channel, i], wav2[channel, i] = wav[channel, index], wav[channel, index+1]
-#             elif random == 1:
-#                 wav1[channel, i], wav2[channel, i] = wav[channel, index+1], wav[channel, index]
+def subsample2(wav):
+    channel,length = wav.shape
+    length = length  // 2 - 128
+    wav1,wav2 = torch.zeros([channel,length]),torch.zeros([channel,length])
+    for channel in range(channel):
+        for i in range(length):
+            random = np.random.choice([0,1])
+            index = i * 2 - 127
+            if random == 0:
+                wav1[channel, i], wav2[channel, i] = wav[channel, index], wav[channel, index+1]
+            elif random == 1:
+                wav1[channel, i], wav2[channel, i] = wav[channel, index+1], wav[channel, index]
     
-#     return wav1,wav2
+    return wav1,wav2
 
 class SpeechDataset(Dataset):
     
@@ -52,12 +52,18 @@ class SpeechDataset(Dataset):
         x_clean = self._prepare_sample(x_clean)
         x_noisy = self._prepare_sample(x_noisy)
         
+        
+        g1,g2 = subsample2(x_noisy)
+        
         # Short-time Fourier transform
+        # x_noisy_stft = stft(x_noisy, self.n_fft, self.hop_length)
+        # x_clean_stft = stft(x_clean, self.n_fft, self.hop_length)
+        g1_stft = stft(g1,self.n_fft,self.hop_length)
+        g2_stft = stft(g2,self.n_fft,self.hop_length)
         
-        x_noisy_stft = stft(x_noisy, self.n_fft, self.hop_length)
-        x_clean_stft = stft(x_clean, self.n_fft, self.hop_length)
         
-        return x_noisy_stft, x_clean_stft
+        return g1_stft,g2_stft
+        # return x_noisy_stft,x_clean_stft
         
     def _prepare_sample(self, waveform):
         current_len = waveform.shape[1]  # オーディオデータの現在の長さを取得
