@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch 
-from CConv import CConv2d , CConvTranspose2d
-from CBatchNorm import CBatchNorm2d
+from network.CConv import CConv2d , CConvTranspose2d
+from network.CBatchNorm import CBatchNorm2d
 
 class Decoder(nn.Module):
     """

@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch 
-from CConv import CConv2d , CConvTranspose2d 
-from CBatchNorm import  CBatchNorm2d
+from network.CConv import CConv2d 
+from network.CBatchNorm import  CBatchNorm2d
 
 class Encoder(nn.Module):
     def __init__(self, filter_size=(7,5), stride_size=(2,2), in_channels=1, out_channels=45, padding=(0,0)):

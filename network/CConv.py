@@ -15,12 +15,14 @@ class CConv2d(nn.Module):
                                    out_channels=self.out_channels, 
                                    kernel_size=self.kernel_size, 
                                    padding=self.padding, 
+                                   dtype=torch.float32,
                                    stride=self.stride)
         
         self.im_conv = nn.Conv2d(in_channels=self.in_channels, 
                                  out_channels=self.out_channels, 
                                  kernel_size=self.kernel_size, 
                                  padding=self.padding, 
+                                 dtype=torch.float32,
                                  stride=self.stride)
         
         nn.init.xavier_uniform_(self.real_conv.weight)
@@ -30,6 +32,9 @@ class CConv2d(nn.Module):
     def forward(self, x):
         if isinstance(x, list):
             x = torch.stack(x)
+        
+        x = x.to(torch.float32)     
+        
         x_real = x[..., 0]
         x_im = x[..., 1]
         
@@ -59,6 +64,7 @@ class CConvTranspose2d(nn.Module):
                                             kernel_size=self.kernel_size, 
                                             output_padding=self.output_padding,
                                             padding=self.padding,
+                                            dtype=torch.float32,
                                             stride=self.stride)
         
         self.im_convt = nn.ConvTranspose2d(in_channels=self.in_channels, 
@@ -66,6 +72,7 @@ class CConvTranspose2d(nn.Module):
                                             kernel_size=self.kernel_size, 
                                             output_padding=self.output_padding, 
                                             padding=self.padding,
+                                            dtype=torch.float32,
                                             stride=self.stride)
         
         
@@ -77,6 +84,9 @@ class CConvTranspose2d(nn.Module):
     def forward(self, x):
         if isinstance(x, list):
             x = torch.stack(x)
+            
+        x = x.to(torch.float32) 
+        
         x_real = x[..., 0]
         x_im = x[..., 1]
         
