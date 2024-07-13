@@ -2,7 +2,7 @@ from pathlib import Path
 from dataset2 import SpeechDataset
 import torch
 from network.dcunet import DCUnet10
-# from ont.network.dcunet_rtstm import DCUnet10_rTSTM
+from network.dcunet_rtstm import DCUnet10_rTSTM
 from torchinfo import summary
 from lightning.pytorch import Trainer
 from lightning.pytorch.loggers import TensorBoardLogger
@@ -36,8 +36,8 @@ test_clean_files = sorted(list(clean_test_dir.rglob('*.wav')))
 
 trainset = SpeechDataset(train_noisy_files,train_clean_files,N_FFT,HOP_LENGTH)
 testset = SpeechDataset(test_noisy_files,test_clean_files,N_FFT,HOP_LENGTH)
-train_loader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True,num_workers=13)
-test_loader = torch.utils.data.DataLoader(testset, batch_size=64, shuffle=False,num_workers=13)
+train_loader = torch.utils.data.DataLoader(trainset, batch_size=8, shuffle=True,num_workers=112)
+test_loader = torch.utils.data.DataLoader(testset, batch_size=8, shuffle=False,num_workers=112)
 
 ################################################################################################################
 
@@ -45,8 +45,8 @@ checkpoint_callback = ModelCheckpoint(
     monitor='val_loss',           # 監視するメトリクス
     dirpath='./checkpoints',      # チェックポイントの保存ディレクトリ
     filename='model-{epoch:02d}-{step:04d}-{val_loss:.2f}',  # ファイル名のフォーマット
-    save_top_k=1,                 # ベストなモデルの数だけ保存
-    mode='min',                   # 監視メトリクスの最小値をベストとす
+    save_top_k=1,
+    verbose=True
 )
 
 
@@ -67,39 +67,46 @@ progress_bar = RichProgressBar(
 )
 
 model =DCUnet10(n_fft=N_FFT,hop_length=HOP_LENGTH)
-# EarlyStopping(monitor="val_loss", mode="min"),
-
-
-
-trainer = Trainer(
-    accelerator="gpu",
-    callbacks=[checkpoint_callback,progress_bar],
-    logger=logger,
-    max_epochs=1000,
-    strategy=strategy,
-    devices=[0,1,2,3,4,5,6,7],
+# model =DCUnet10_rTSTM(n_fft=N_FFT,hop_length=HOP_LENGTH)
+early_stopping_callback = EarlyStopping(
+    monitor='val_loss',  # 監視するメトリクス
+    patience=10,          # 改善が見られないエポック数
+    verbose=True,        # メッセージの出力
+    mode='min'           # 最小化を目指す（val_lossが減少する方向）
 )
 
-trainer.fit(model,train_loader,test_loader)
 
-
-# checkpoint = "./checkpoints/TSTM-WSDR-URBAN-0.ckpt"
-# checkpoint = "./checkpoints/NORMAL-WSDR-URBAN-0.ckpt"
-# pred_model = DCUnet10.load_from_checkpoint(checkpoint,n_fft=N_FFT,hop_length=HOP_LENGTH)
-
-# pred_noisy_files = sorted(list(noisy_test_dir.rglob('*.wav'))[0:48])
-# pred_clean_files = sorted(list(clean_test_dir.rglob('*.wav'))[0:48])
-# testset = SpeechDataset(pred_noisy_files,pred_clean_files,N_FFT,HOP_LENGTH)
-
-# pred_loader = torch.utils.data.DataLoader(testset, batch_size=16, shuffle=False)
 
 # trainer = Trainer(
 #     accelerator="gpu",
-#     callbacks=[progress_bar],
-#     devices=[0]
+#     callbacks=[checkpoint_callback,progress_bar,early_stopping_callback],
+#     logger=logger,
+#     max_epochs=1000,
+#     strategy=strategy,
+#     devices=[0,1,2,3,4,5,6,7]
+#     # devices=[0]
 # )
 
-# # Make predictions on the test dataset
-# predictions = trainer.predict(pred_model, dataloaders=pred_loader)
+# trainer.fit(model,train_loader,test_loader)
+
+
+checkpoint = "/workspace/app/ont/checkpoints/NONE-SCHEDULER/normal_urban0_model-epoch=111-step=2576-val_loss=-0.97.ckpt"
+# pred_model = DCUnet10_rTSTM.load_from_checkpoint(checkpoint,n_fft=N_FFT,hop_length=HOP_LENGTH)
+pred_model = DCUnet10.load_from_checkpoint(checkpoint,n_fft=N_FFT,hop_length=HOP_LENGTH)
+pred_noisy_files = sorted(list(noisy_test_dir.rglob('*.wav'))[0:16])
+pred_clean_files = sorted(list(clean_test_dir.rglob('*.wav'))[0:16])
+
+
+testset = SpeechDataset(pred_noisy_files,pred_clean_files,N_FFT,HOP_LENGTH)
+pred_loader = torch.utils.data.DataLoader(testset, batch_size=16, shuffle=False,num_workers=111)
+
+trainer = Trainer(
+    accelerator="gpu",
+    callbacks=[progress_bar],
+    devices=[0]
+)
+
+# Make predictions on the test dataset
+predictions = trainer.predict(pred_model, dataloaders=pred_loader)
 
 

@@ -2,7 +2,7 @@ from lightning.pytorch import LightningModule
 import torch
 from network.Encoder import Encoder
 from network.Decoder import Decoder 
-from metrics import getPesqList,getSNRList
+from metrics import getPesqList,getSNRList,getSTOIList
 from stft import istft
 import torchaudio
 import numpy as np
@@ -10,6 +10,7 @@ import os
 from network.Dual_Transformer import Dual_Transformer
 from pathlib import Path
 from wsdr import wsdr_fn
+from loss import RegularizedLoss
 
 def subsample2(wav):  
     # This function only works for k = 2 as of now.
@@ -43,8 +44,10 @@ class DCUnet10_rTSTM(LightningModule):
         
         self.loss_fn = RegularizedLoss()
         self.cnt = 0
-        self.pesq_scores = []
+        self.pesqNb_scores = []
+        self.pesqWb_scores = []
         self.snr_scores = []
+        self.stoi_scores = []
         self.total_samples = 0
         self.saved = False  # Add a flag to keep track if the audio has been saved
         
@@ -200,11 +203,15 @@ class DCUnet10_rTSTM(LightningModule):
     def predict_step(self, batch, batch_idx):
         x,y = batch
         pred = self.forward(x)
-        pesq = getPesqList(pred,x,self.n_fft,self.hop_length)
+        pesqNb = getPesqList(pred,x,self.n_fft,self.hop_length,"nb")
+        pesqWb = getPesqList(pred,x,self.n_fft,self.hop_length,"wb")
         snr = getSNRList(pred,y,self.n_fft,self.hop_length)
+        stoi = getSTOIList(pred,y,self.n_fft,self.hop_length)
         
-        self.pesq_scores.append(pesq)
+        self.pesqNb_scores.append(pesqNb)
+        self.pesqWb_scores.append(pesqWb)
         self.snr_scores.append(snr)
+        self.stoi_scores.append(stoi)
         self.total_samples += batch[0].size(0)
 
         # Ensure the 'pred' directory exists
@@ -217,20 +224,26 @@ class DCUnet10_rTSTM(LightningModule):
                 pred_audio = istft(pred[self.cnt], self.n_fft, self.hop_length)
                 
                 # Save the audio files
-                torchaudio.save("pred/input"+str(self.cnt)+".wav", x_audio.cpu(), 48000)
-                torchaudio.save("pred/target"+str(self.cnt)+".wav", y_audio.cpu(), 48000)
-                torchaudio.save("pred/predicted"+str(self.cnt)+".wav", pred_audio.cpu(), 48000)
+                torchaudio.save("/workspace/app/ont/pred/input"+str(self.cnt)+".wav", x_audio.cpu(), 48000)
+                torchaudio.save("/workspace/app/ont/pred/target"+str(self.cnt)+".wav", y_audio.cpu(), 48000)
+                torchaudio.save("/workspace/app/ont/pred/predicted"+str(self.cnt)+".wav", pred_audio.cpu(), 48000)
                 
                 self.cnt += 1
             
             # self.saved = True  # Update the flag to avoid saving again
         
     def on_predict_end(self):
-        average_pesq = sum(self.pesq_scores) / self.total_samples
+        average_pesqNb = sum(self.pesqNb_scores) / self.total_samples
+        average_pesqWb = sum(self.pesqWb_scores) / self.total_samples
         average_snr = sum(self.snr_scores) / self.total_samples
+        average_stoi = sum(self.stoi_scores) / self.total_samples
         
-        print(f"pesq :{average_pesq}")
+        print(f"pesq-nb :{average_pesqNb}")
+        print(f"pesq-wb :{average_pesqWb}")
         print(f"snr : {average_snr}")
+        print(f"stoi : {average_stoi}")
     
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=1e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.1)
+        return [optimizer], [scheduler]

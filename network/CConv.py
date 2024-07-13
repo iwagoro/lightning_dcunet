@@ -31,13 +31,10 @@ class CConv2d(nn.Module):
         
     def forward(self, x):
         if isinstance(x, list):
-            x = torch.stack(x)
-        
-        x = x.to(torch.float32)     
-        
+            x = torch.stack(x) 
+
         x_real = x[..., 0]
         x_im = x[..., 1]
-        
         c_real = self.real_conv(x_real) - self.im_conv(x_im)
         c_im = self.im_conv(x_real) + self.real_conv(x_im)
         
