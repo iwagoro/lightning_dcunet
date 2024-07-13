@@ -1,8 +1,6 @@
 import torch
 from preprocess import TorchSignalToFrames
-from scipy import linalg
-import numpy as np
-import scipy
+import torch.fft
 
 class mse_loss(object):
     def __call__(self, outputs, labels, loss_mask):
@@ -11,26 +9,18 @@ class mse_loss(object):
         loss = torch.sum((masked_outputs - masked_labels)**2.0) / torch.sum(loss_mask)
         return loss
 
-
 class stftm_loss(object):
     def __init__(self, frame_size=512, frame_shift=256, loss_type='mae'):
         self.frame_size = frame_size
         self.frame_shift = frame_shift
         self.loss_type = loss_type
-        #self.device = device
-        self.frame = TorchSignalToFrames(frame_size=self.frame_size,
-                                         frame_shift=self.frame_shift)
-        D = linalg.dft(frame_size)
-        W = np.hamming(self.frame_size)
-        DR = np.real(D)
-        DI = np.imag(D)
-        self.DR = torch.from_numpy(DR).float().cuda()  # to(self.device)
-        self.DR = self.DR.contiguous().transpose(0, 1)
-        self.DI = torch.from_numpy(DI).float().cuda()  # to(self.device)
-        self.DI = self.DI.contiguous().transpose(0, 1)
-        self.W = torch.from_numpy(W).float().cuda()  # to(self.device)
+        self.frame = TorchSignalToFrames(frame_size=self.frame_size, frame_shift=self.frame_shift)
+        W = torch.hamming_window(self.frame_size)
+        self.W = W.float().cuda()
 
     def __call__(self, outputs, labels, loss_mask):
+        device = outputs.device  # 出力テンソルのデバイスを取得
+        self.W = self.W.to(device)  # 重みテンソルを出力テンソルのデバイスに移動
         outputs = self.frame(outputs)
         labels = self.frame(labels)
         loss_mask = self.frame(loss_mask)
@@ -48,11 +38,10 @@ class stftm_loss(object):
 
     def get_stftm(self, frames):
         frames = frames * self.W
-        stft_R = torch.matmul(frames, self.DR)
-        stft_I = torch.matmul(frames, self.DI)
-        stftm = torch.abs(stft_R) + torch.abs(stft_I)
+        stft = torch.fft.fft(frames, n=self.frame_size, dim=-1)
+        stftm = torch.abs(stft.real) + torch.abs(stft.imag)
         return stftm
 
 class reg_loss(object):
     def __call__(self, fg1, g2, g1fx, g2fx):
-        return torch.mean((fg1-g2-g1fx+g2fx)**2)
+        return torch.mean((fg1 - g2 - g1fx + g2fx)**2)
