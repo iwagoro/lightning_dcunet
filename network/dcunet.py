@@ -9,6 +9,7 @@ import numpy as np
 import os
 from pathlib import Path
 from wsdr import wsdr_fn
+from loss import RegularizedLoss
 
 def subsample2(wav):  
     # This function only works for k = 2 as of now.
@@ -33,7 +34,7 @@ def subsample2(wav):
     return torch.from_numpy(wav1).cuda(), torch.from_numpy(wav2).cuda()
 
 class DCUnet10(LightningModule):
-    def __init__(self, n_fft, hop_length):
+    def __init__(self, n_fft, hop_length,dataset=""):
         super().__init__()
         
         
@@ -47,6 +48,9 @@ class DCUnet10(LightningModule):
 
         self.n_fft = n_fft
         self.hop_length = hop_length
+        self.model = "dcunet"
+        self.dataset = dataset
+        self.loss_fn = RegularizedLoss()
         
         self.save_hyperparameters()
         # downsampling/encoding
@@ -95,48 +99,48 @@ class DCUnet10(LightningModule):
         
         return output
         
-    # def training_step(self, batch, batch_idx):
-    #     x_noisy_stft, g1_stft, g1_wav, g2_wav, x_clean_stft= batch
-    #     fg1_wav = self.forward(g1_stft)
-    #     fg1_wav = istft(fg1_wav,self.n_fft,self.hop_length)
-    #     with torch.no_grad():
-    #         fx_wav = self.forward(x_noisy_stft)
-    #         fx_wav = istft(fx_wav,self.n_fft,self.hop_length)
-    #         g1fx, g2fx = subsample2(fx_wav)
-    #         g1fx, g2fx = g1fx.type(torch.FloatTensor), g2fx.type(torch.FloatTensor)
-    #     g1_wav, fg1_wav, g2_wav, g1fx, g2fx = g1_wav.cuda(), fg1_wav.cuda(), g2_wav.cuda(), g1fx.cuda(), g2fx.cuda()
-    #     loss = self.loss_fn(g1_wav, fg1_wav, g2_wav, g1fx, g2fx)
-    #     self.log("train_loss", loss, prog_bar=True, sync_dist=True)
-    #     return loss
-    
     def training_step(self, batch, batch_idx):
-        x,y = batch
-        pred = self.forward(x)
-        loss = wsdr_fn(x,pred,y,self.n_fft,self.hop_length)
-        self.log("train_loss", loss, prog_bar=True,sync_dist=True)
+        x_noisy_stft, g1_stft, g1_wav, g2_wav, x_clean_stft= batch
+        fg1_wav = self.forward(g1_stft)
+        fg1_wav = istft(fg1_wav,self.n_fft,self.hop_length)
+        with torch.no_grad():
+            fx_wav = self.forward(x_noisy_stft)
+            fx_wav = istft(fx_wav,self.n_fft,self.hop_length)
+            g1fx, g2fx = subsample2(fx_wav)
+            g1fx, g2fx = g1fx.type(torch.FloatTensor), g2fx.type(torch.FloatTensor)
+        g1_wav, fg1_wav, g2_wav, g1fx, g2fx = g1_wav.cuda(), fg1_wav.cuda(), g2_wav.cuda(), g1fx.cuda(), g2fx.cuda()
+        loss = self.loss_fn(g1_wav, fg1_wav, g2_wav, g1fx, g2fx)
+        self.log("train_loss", loss, prog_bar=True, sync_dist=True)
         return loss
     
-    # def validation_step(self, batch, batch_idx):
-    #     x_noisy_stft, g1_stft, g1_wav, g2_wav, x_clean_stft= batch
-    #     fg1_wav = self.forward(g1_stft)
-    #     fg1_wav = istft(fg1_wav,self.n_fft,self.hop_length)
-    #     with torch.no_grad():
-    #         fx_wav = self.forward(x_noisy_stft)
-    #         fx_wav = istft(fx_wav,self.n_fft,self.hop_length)
-    #         g1fx, g2fx = subsample2(fx_wav)
-    #         g1fx, g2fx = g1fx.type(torch.FloatTensor), g2fx.type(torch.FloatTensor)
-    #     g1_wav, fg1_wav, g2_wav, g1fx, g2fx = g1_wav.cuda(), fg1_wav.cuda(), g2_wav.cuda(), g1fx.cuda(), g2fx.cuda()
-    #     loss = self.loss_fn(g1_wav, fg1_wav, g2_wav, g1fx, g2fx)
-    #     self.log("val_loss", loss, prog_bar=True, sync_dist=True)
+    # def training_step(self, batch, batch_idx):
+    #     x,y = batch
+    #     pred = self.forward(x)
+    #     loss = wsdr_fn(x,pred,y,self.n_fft,self.hop_length)
+    #     self.log("train_loss", loss, prog_bar=True,sync_dist=True)
     #     return loss
     
-    def validation_step(self,batch,batch_idx):
-        x,y = batch
-        # print(x.shape)
-        pred = self.forward(x)
-        loss = wsdr_fn(x,pred,y,self.n_fft,self.hop_length)
-        self.log("val_loss", loss, prog_bar=True,sync_dist=True)
+    def validation_step(self, batch, batch_idx):
+        x_noisy_stft, g1_stft, g1_wav, g2_wav, x_clean_stft= batch
+        fg1_wav = self.forward(g1_stft)
+        fg1_wav = istft(fg1_wav,self.n_fft,self.hop_length)
+        with torch.no_grad():
+            fx_wav = self.forward(x_noisy_stft)
+            fx_wav = istft(fx_wav,self.n_fft,self.hop_length)
+            g1fx, g2fx = subsample2(fx_wav)
+            g1fx, g2fx = g1fx.type(torch.FloatTensor), g2fx.type(torch.FloatTensor)
+        g1_wav, fg1_wav, g2_wav, g1fx, g2fx = g1_wav.cuda(), fg1_wav.cuda(), g2_wav.cuda(), g1fx.cuda(), g2fx.cuda()
+        loss = self.loss_fn(g1_wav, fg1_wav, g2_wav, g1fx, g2fx)
+        self.log("val_loss", loss, prog_bar=True, sync_dist=True)
         return loss
+    
+    # def validation_step(self,batch,batch_idx):
+    #     x,y = batch
+    #     # print(x.shape)
+    #     pred = self.forward(x)
+    #     loss = wsdr_fn(x,pred,y,self.n_fft,self.hop_length)
+    #     self.log("val_loss", loss, prog_bar=True,sync_dist=True)
+    #     return loss
     
     # def predict_step(self, batch, batch_idx):
     #     x_noisy_stft, g1_stft, g1_wav, g2_wav, x_clean_stft= batch
@@ -186,7 +190,7 @@ class DCUnet10(LightningModule):
         self.total_samples += batch[0].size(0)
 
         # Ensure the 'pred' directory exists
-        Path("pred").mkdir(parents=True, exist_ok=True)
+        Path("pred/"+ self.model + "-" + self.dataset).mkdir(parents=True, exist_ok=True)
 
         if not self.saved:
             for i in range(len(batch)):
@@ -195,9 +199,9 @@ class DCUnet10(LightningModule):
                 pred_audio = istft(pred[self.cnt], self.n_fft, self.hop_length)
                 
                 # Save the audio files
-                torchaudio.save("/workspace/app/ont/pred/input"+str(self.cnt)+".wav", x_audio.cpu(), 48000)
-                torchaudio.save("/workspace/app/ont/pred/target"+str(self.cnt)+".wav", y_audio.cpu(), 48000)
-                torchaudio.save("/workspace/app/ont/pred/predicted"+str(self.cnt)+".wav", pred_audio.cpu(), 48000)
+                torchaudio.save("./pred/" + self.model + "-" + self.dataset + "/noisy"+str(self.cnt)+".wav", x_audio.cpu(), 48000)
+                torchaudio.save("./pred/" + self.model + "-" + self.dataset + "/clean"+str(self.cnt)+".wav", y_audio.cpu(), 48000)
+                torchaudio.save("./pred/" + self.model + "-" + self.dataset + "/pred"+str(self.cnt)+".wav", pred_audio.cpu(), 48000)
                 
                 self.cnt += 1
             
@@ -209,6 +213,10 @@ class DCUnet10(LightningModule):
         average_snr = sum(self.snr_scores) / self.total_samples
         average_stoi = sum(self.stoi_scores) / self.total_samples
         
+        print("-----------------------------------")
+        print("model : "+self.model)
+        print("dataset : "+ self.dataset)
+        print("-----------------------------------")
         print(f"pesq-nb :{average_pesqNb}")
         print(f"pesq-wb :{average_pesqWb}")
         print(f"snr : {average_snr}")

@@ -1,2 +1,3 @@
+dataset: white
 hop_length: 256
 n_fft: 1022
