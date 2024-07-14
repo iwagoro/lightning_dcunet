@@ -1,11 +1,10 @@
 import argparse
 from pathlib import Path
 # from dataset2 import SpeechDataset
-from dataset import SpeechDataset
+from dataset3 import SpeechDataset
 import torch
 from network.dcunet import DCUnet10
 from network.dcunet_rtstm import DCUnet10_rTSTM
-from torchinfo import summary
 from lightning.pytorch import Trainer
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.callbacks import EarlyStopping
@@ -46,8 +45,8 @@ def main(args):
 
     trainset = SpeechDataset(train_noisy_files, train_clean_files, N_FFT, HOP_LENGTH)
     testset = SpeechDataset(test_noisy_files, test_clean_files, N_FFT, HOP_LENGTH)
-    train_loader = torch.utils.data.DataLoader(trainset, batch_size=8, shuffle=True, num_workers=8,persistent_workers=True)
-    test_loader = torch.utils.data.DataLoader(testset, batch_size=8, shuffle=False, num_workers=8,persistent_workers=True)
+    train_loader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True, num_workers=8,persistent_workers=True)
+    test_loader = torch.utils.data.DataLoader(testset, batch_size=64, shuffle=False, num_workers=8,persistent_workers=True)
 
     # Update checkpoint and logger paths with model and dataset names
     checkpoint_dir = f'./checkpoints/{args.model}-{args.dataset}'
@@ -128,7 +127,7 @@ if __name__ == '__main__':
     parser.add_argument('--mode', type=str, required=True, help="Mode: 'train' or 'predict'")
     parser.add_argument('--dataset', type=str, required=True, help="Dataset: 'white', 'urban0', 'urban1', 'urban2'")
     parser.add_argument('--model', type=str, required=True, help="Model: 'dcunet' or 'dcunet-rtstm'")
-    parser.add_argument('--devices', type=int, nargs='+', default=[0,1,2,3,4,5,6,7], help="List of GPU devices to use")
+    parser.add_argument('--devices', type=int, nargs='+', default=[0], help="List of GPU devices to use")
     parser.add_argument('--checkpoint', type=str, help="Checkpoint file for prediction")
 
     args = parser.parse_args()

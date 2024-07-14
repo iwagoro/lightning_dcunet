@@ -41,14 +41,8 @@ class SpeechDataset(Dataset):
         x_clean = self._prepare_sample(x_clean)
         x_noisy = self._prepare_sample(x_noisy)
         
-        # Short-time Fourier transform
-        # g1_wav,g2_wav = subsample2(x_noisy)
-        x_noisy_stft = stft(x_noisy, self.n_fft, self.hop_length)
-        x_clean_stft = stft(x_clean, self.n_fft, self.hop_length)
-        # g1_stft = stft(g1_wav, self.n_fft, self.hop_length)
-        # g2_stft = stft(g2_wav, self.n_fft, self.hop_length)
         
-        return x_noisy_stft, x_clean_stft
+        return x_noisy,x_clean
         
         # return g1_stft,g2_stft
         

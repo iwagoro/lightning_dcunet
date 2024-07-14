@@ -9,29 +9,59 @@ import numpy as np
 import os
 from pathlib import Path
 from wsdr import wsdr_fn
+from stft import stft ,istft
 from loss import RegularizedLoss
+from stft_loss import basic_loss,reg_loss
 
-def subsample2(wav):  
-    # This function only works for k = 2 as of now.
-    k = 2
-    channels, dim= np.shape(wav) 
+def subsample2(wav, device=None):
+    if device is None:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    wav1 = []
+    wav2 = []
+    for i in range(len(wav)):
+        channel, length = wav[i].shape
+        new_length = length // 2 - 128
 
-    dim1 = dim // k -128     # 128 is used to correct the size of the sampled data, you can change it
-    wav1, wav2 = np.zeros([channels, dim1]), np.zeros([channels, dim1])   # [2, 1, 32640]
-    #print("wav1:", wav1.shape)
-    #print("wav2:", wav2.shape)
+        # ランダムなインデックスを生成
+        indices = (torch.arange(new_length, device=device) * 2 - 127).unsqueeze(0).repeat(channel, 1)
 
-    wav_cpu = wav.cpu()
-    for channel in range(channels):
-        for i in range(dim1):
-            i1 = i * k
-            num = np.random.choice([0, 1])
-            if num == 0:
-                wav1[channel, i], wav2[channel, i] = wav_cpu[channel, i1], wav_cpu[channel, i1+1]
-            elif num == 1:
-                wav1[channel, i], wav2[channel, i] = wav_cpu[channel, i1+1], wav_cpu[channel, i1]
+        # インデックスの境界を処理
+        indices = indices.clamp(0, length - 2)
 
-    return torch.from_numpy(wav1).cuda(), torch.from_numpy(wav2).cuda()
+        random_choice = torch.randint(0, 2, (channel, new_length), device=device)
+
+        # ランダムに選択されたインデックスを作成
+        index1 = indices + random_choice
+        index2 = indices + (1 - random_choice)
+
+        # 新しいテンソルを作成
+        wav1.append( torch.gather(wav[i].to(device), 1, index1))
+        wav2.append( torch.gather(wav[i].to(device), 1, index2))
+    wav1 = torch.cat(wav1,dim=0).unsqueeze(1)
+    wav2 = torch.cat(wav2,dim=0).unsqueeze(1)
+    return wav1, wav2
+
+def tensor_stft(wav,n_fft,hop_length):
+    result = []
+    
+    for i in range(len(wav)):
+        wav_stft = stft(wav[i],n_fft,hop_length)
+        result.append(wav_stft)
+    
+    result = torch.cat(result,dim=0).unsqueeze(1)
+    return result
+
+
+def tensor_istft(stft,n_fft,hop_length):
+    result = []
+    
+    for i in range(len(stft)):
+        wav = istft(stft[i],n_fft,hop_length)
+        result.append(wav)
+    
+    result = torch.cat(result,dim=0).unsqueeze(1)
+    return result
+    
 
 class DCUnet10(LightningModule):
     def __init__(self, n_fft, hop_length,dataset=""):
@@ -51,6 +81,7 @@ class DCUnet10(LightningModule):
         self.model = "dcunet"
         self.dataset = dataset
         self.loss_fn = RegularizedLoss()
+        self.gamma = self.gamma = 1
         
         self.save_hyperparameters()
         # downsampling/encoding
@@ -100,16 +131,17 @@ class DCUnet10(LightningModule):
         return output
         
     def training_step(self, batch, batch_idx):
-        x_noisy_stft, g1_stft, g1_wav, g2_wav, x_clean_stft= batch
-        fg1_wav = self.forward(g1_stft)
-        fg1_wav = istft(fg1_wav,self.n_fft,self.hop_length)
+        noisy,clean= batch
+        g1,g2 = subsample2(noisy,self.device)
+        g1_stft = tensor_stft(g1,self.n_fft,self.hop_length)
+        fg1_stft = self.forward(g1_stft)
+        fg1 = tensor_istft(fg1_stft,self.n_fft,self.hop_length)
         with torch.no_grad():
-            fx_wav = self.forward(x_noisy_stft)
-            fx_wav = istft(fx_wav,self.n_fft,self.hop_length)
-            g1fx, g2fx = subsample2(fx_wav)
-            g1fx, g2fx = g1fx.type(torch.FloatTensor), g2fx.type(torch.FloatTensor)
-        g1_wav, fg1_wav, g2_wav, g1fx, g2fx = g1_wav.cuda(), fg1_wav.cuda(), g2_wav.cuda(), g1fx.cuda(), g2fx.cuda()
-        loss = self.loss_fn(g1_wav, fg1_wav, g2_wav, g1fx, g2fx)
+            noisy_stft = tensor_stft(noisy,self.n_fft,self.hop_length)
+            f_stft = self.forward(noisy_stft)
+            f = tensor_istft(f_stft,self.n_fft,self.hop_length)
+            g1f, g2f = subsample2(f,self.device)
+        loss = basic_loss(g1,g2,fg1,self.n_fft,self.hop_length,self.device)+ reg_loss(fg1,g2,g1f,g2f)
         self.log("train_loss", loss, prog_bar=True, sync_dist=True)
         return loss
     
@@ -121,16 +153,17 @@ class DCUnet10(LightningModule):
     #     return loss
     
     def validation_step(self, batch, batch_idx):
-        x_noisy_stft, g1_stft, g1_wav, g2_wav, x_clean_stft= batch
-        fg1_wav = self.forward(g1_stft)
-        fg1_wav = istft(fg1_wav,self.n_fft,self.hop_length)
+        noisy,clean= batch
+        g1,g2 = subsample2(noisy,self.device)
+        g1_stft = tensor_stft(g1,self.n_fft,self.hop_length)
+        fg1_stft = self.forward(g1_stft)
+        fg1 = tensor_istft(fg1_stft,self.n_fft,self.hop_length)
         with torch.no_grad():
-            fx_wav = self.forward(x_noisy_stft)
-            fx_wav = istft(fx_wav,self.n_fft,self.hop_length)
-            g1fx, g2fx = subsample2(fx_wav)
-            g1fx, g2fx = g1fx.type(torch.FloatTensor), g2fx.type(torch.FloatTensor)
-        g1_wav, fg1_wav, g2_wav, g1fx, g2fx = g1_wav.cuda(), fg1_wav.cuda(), g2_wav.cuda(), g1fx.cuda(), g2fx.cuda()
-        loss = self.loss_fn(g1_wav, fg1_wav, g2_wav, g1fx, g2fx)
+            noisy_stft = tensor_stft(noisy,self.n_fft,self.hop_length)
+            f_stft = self.forward(noisy_stft)
+            f = tensor_istft(f_stft,self.n_fft,self.hop_length)
+            g1f, g2f = subsample2(f,self.device)
+        loss = basic_loss(g1,g2,fg1,self.n_fft,self.hop_length,self.device) + self.gamma * reg_loss(fg1,g2,g1f,g2f)
         self.log("val_loss", loss, prog_bar=True, sync_dist=True)
         return loss
     
@@ -177,6 +210,8 @@ class DCUnet10(LightningModule):
     
     def predict_step(self, batch, batch_idx):
         x,y = batch
+        x = tensor_stft(x,self.n_fft,self.hop_length)
+        y = tensor_stft(y,self.n_fft,self.hop_length)
         pred = self.forward(x)
         pesqNb = getPesqList(pred,y,self.n_fft,self.hop_length,"nb")
         pesqWb = getPesqList(pred,y,self.n_fft,self.hop_length,"wb")
@@ -193,7 +228,7 @@ class DCUnet10(LightningModule):
         Path("pred/"+ self.model + "-" + self.dataset).mkdir(parents=True, exist_ok=True)
 
         if not self.saved:
-            for i in range(len(batch)):
+            for i in range(len(x)):
                 x_audio = istft(x[self.cnt], self.n_fft, self.hop_length)
                 y_audio = istft(y[self.cnt], self.n_fft, self.hop_length)
                 pred_audio = istft(pred[self.cnt], self.n_fft, self.hop_length)
@@ -223,6 +258,6 @@ class DCUnet10(LightningModule):
         print(f"stoi : {average_stoi}")
     
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.1)
         return [optimizer], [scheduler]
