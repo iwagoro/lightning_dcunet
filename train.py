@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
-# from dataset2 import SpeechDataset
-from dataset3 import SpeechDataset
+from dataset2 import SpeechDataset # for dcunet
+# from dataset3 import SpeechDataset #for ont
 import torch
 from network.dcunet import DCUnet10
 from network.dcunet_rtstm import DCUnet10_rTSTM
@@ -45,8 +45,8 @@ def main(args):
 
     trainset = SpeechDataset(train_noisy_files, train_clean_files, N_FFT, HOP_LENGTH)
     testset = SpeechDataset(test_noisy_files, test_clean_files, N_FFT, HOP_LENGTH)
-    train_loader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True, num_workers=8,persistent_workers=True)
-    test_loader = torch.utils.data.DataLoader(testset, batch_size=64, shuffle=False, num_workers=8,persistent_workers=True)
+    train_loader = torch.utils.data.DataLoader(trainset, batch_size=16, shuffle=True, num_workers=8,persistent_workers=True)
+    test_loader = torch.utils.data.DataLoader(testset, batch_size=16, shuffle=False, num_workers=8,persistent_workers=True)
 
     # Update checkpoint and logger paths with model and dataset names
     checkpoint_dir = f'./checkpoints/{args.model}-{args.dataset}'
@@ -105,13 +105,13 @@ def main(args):
         if args.model == 'dcunet':
             pred_model = DCUnet10.load_from_checkpoint(checkpoint, n_fft=N_FFT, hop_length=HOP_LENGTH,dataset=args.dataset)
         elif args.model == 'dcunet-rtstm':
-            pred_model = DCUnet10_rTSTM.load_from_checkpoint(checkpoint, n_fft=N_FFT, hop_length=HOP_LENGTH)
+            pred_model = DCUnet10_rTSTM.load_from_checkpoint(checkpoint, n_fft=N_FFT, hop_length=HOP_LENGTH,dataset=args.dataset)
 
-        pred_noisy_files = sorted(list(noisy_test_dir.rglob('*.wav'))[:16])
-        pred_clean_files = sorted(list(clean_test_dir.rglob('*.wav'))[:16])
+        pred_noisy_files = sorted(list(noisy_test_dir.rglob('*.wav'))[:8])
+        pred_clean_files = sorted(list(clean_test_dir.rglob('*.wav'))[:8])
 
         testset = SpeechDataset(pred_noisy_files, pred_clean_files, N_FFT, HOP_LENGTH)
-        pred_loader = torch.utils.data.DataLoader(testset, batch_size=16, shuffle=False, num_workers=8,persistent_workers=True)
+        pred_loader = torch.utils.data.DataLoader(testset, batch_size=8, shuffle=False, num_workers=8,persistent_workers=True)
 
         trainer = Trainer(
             accelerator="gpu",

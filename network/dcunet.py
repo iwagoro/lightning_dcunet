@@ -67,8 +67,6 @@ class DCUnet10(LightningModule):
     def __init__(self, n_fft, hop_length,dataset=""):
         super().__init__()
         
-        
-        self.cnt = 0
         self.pesqNb_scores = []
         self.pesqWb_scores = []
         self.snr_scores = []
@@ -175,47 +173,15 @@ class DCUnet10(LightningModule):
     #     self.log("val_loss", loss, prog_bar=True,sync_dist=True)
     #     return loss
     
-    # def predict_step(self, batch, batch_idx):
-    #     x_noisy_stft, g1_stft, g1_wav, g2_wav, x_clean_stft= batch
-    #     x = x_noisy_stft
-    #     y = x_clean_stft
-    #     pred = self.forward(x)
-    #     snr = getSNRList(pred, y, self.n_fft, self.hop_length)
-    #     pesq = getPesqList(pred, x, self.n_fft, self.hop_length)
-        
-    #     self.pesq_scores.append(pesq)
-    #     self.snr_scores.append(snr)
-    #     self.total_samples += batch[0].size(0)
-
-    #     # Save only the first example
-    #     if not self.saved:
-    #         x_audio = istft(x[5], self.n_fft, self.hop_length)
-    #         y_audio = istft(y[5], self.n_fft, self.hop_length)
-    #         pred_audio = istft(pred[5], self.n_fft, self.hop_length)
-            
-            
-    #         # Save the first example only
-    #         torchaudio.save("input.wav", x_audio.cpu(), 48000)
-    #         torchaudio.save("target.wav", y_audio.cpu(), 48000)
-    #         torchaudio.save("predicted.wav", pred_audio.cpu(), 48000)
-            
-    #         self.saved = True  # Update the flag to avoid saving again
-        
-    # def on_predict_end(self):
-    #     average_pesq = sum(self.pesq_scores) / self.total_samples
-    #     average_snr = sum(self.snr_scores) / self.total_samples
-        
-    #     print(f"pesq :{average_pesq}")
-    #     print(f"snr : {average_snr}")
-    
     def predict_step(self, batch, batch_idx):
         x,y = batch
-        x = tensor_stft(x,self.n_fft,self.hop_length)
-        y = tensor_stft(y,self.n_fft,self.hop_length)
+        
+        # x = tensor_stft(x,self.n_fft,self.hop_length)
+        # y = tensor_stft(y,self.n_fft,self.hop_length)
         pred = self.forward(x)
         pesqNb = getPesqList(pred,y,self.n_fft,self.hop_length,"nb")
         pesqWb = getPesqList(pred,y,self.n_fft,self.hop_length,"wb")
-        snr = getSNRList(pred,x,self.n_fft,self.hop_length)
+        snr = getSNRList(pred,y,self.n_fft,self.hop_length)
         stoi = getSTOIList(pred,y,self.n_fft,self.hop_length)
         
         self.pesqNb_scores.append(pesqNb)
@@ -226,21 +192,16 @@ class DCUnet10(LightningModule):
 
         # Ensure the 'pred' directory exists
         Path("pred/"+ self.model + "-" + self.dataset).mkdir(parents=True, exist_ok=True)
-
-        if not self.saved:
-            for i in range(len(x)):
-                x_audio = istft(x[self.cnt], self.n_fft, self.hop_length)
-                y_audio = istft(y[self.cnt], self.n_fft, self.hop_length)
-                pred_audio = istft(pred[self.cnt], self.n_fft, self.hop_length)
-                
-                # Save the audio files
-                torchaudio.save("./pred/" + self.model + "-" + self.dataset + "/noisy"+str(self.cnt)+".wav", x_audio.cpu(), 48000)
-                torchaudio.save("./pred/" + self.model + "-" + self.dataset + "/clean"+str(self.cnt)+".wav", y_audio.cpu(), 48000)
-                torchaudio.save("./pred/" + self.model + "-" + self.dataset + "/pred"+str(self.cnt)+".wav", pred_audio.cpu(), 48000)
-                
-                self.cnt += 1
+        for i in range(len(x)):
+            x_audio = istft(x[i], self.n_fft, self.hop_length)
+            y_audio = istft(y[i], self.n_fft, self.hop_length)
+            pred_audio = istft(pred[i], self.n_fft, self.hop_length)
             
-            # self.saved = True  # Update the flag to avoid saving again
+            # Save the audio files
+            torchaudio.save("./pred/" + self.model + "-" + self.dataset + "/noisy"+str(i)+".wav", x_audio.cpu(), 48000)
+            torchaudio.save("./pred/" + self.model + "-" + self.dataset + "/clean"+str(i)+".wav", y_audio.cpu(), 48000)
+            torchaudio.save("./pred/" + self.model + "-" + self.dataset + "/pred"+str(i)+".wav", pred_audio.cpu(), 48000)
+            
         
     def on_predict_end(self):
         average_pesqNb = sum(self.pesqNb_scores) / self.total_samples
@@ -257,7 +218,52 @@ class DCUnet10(LightningModule):
         print(f"snr : {average_snr}")
         print(f"stoi : {average_stoi}")
     
+    # def predict_step(self, batch, batch_idx):
+    #     x,y = batch
+    #     x = tensor_stft(x,self.n_fft,self.hop_length)
+    #     y = tensor_stft(y,self.n_fft,self.hop_length)
+    #     pred = self.forward(x)
+    #     pesqNb = getPesqList(pred,y,self.n_fft,self.hop_length,"nb")
+    #     pesqWb = getPesqList(pred,y,self.n_fft,self.hop_length,"wb")
+    #     snr = getSNRList(pred,x,self.n_fft,self.hop_length)
+    #     stoi = getSTOIList(pred,y,self.n_fft,self.hop_length)
+        
+    #     self.pesqNb_scores.append(pesqNb)
+    #     self.pesqWb_scores.append(pesqWb)
+    #     self.snr_scores.append(snr)
+    #     self.stoi_scores.append(stoi)
+    #     self.total_samples += batch[0].size(0)
+
+    #     # Ensure the 'pred' directory exists
+    #     Path("pred/"+ self.model + "-" + self.dataset).mkdir(parents=True, exist_ok=True)
+
+    #     for i in range(len(batch)):
+    #         x_audio = istft(x[i], self.n_fft, self.hop_length)
+    #         y_audio = istft(y[i], self.n_fft, self.hop_length)
+    #         pred_audio = istft(pred[i], self.n_fft, self.hop_length)
+            
+    #         # Save the audio files
+    #         torchaudio.save("./pred/" + self.model + "-" + self.dataset + "/noisy"+str(i)+".wav", x_audio.cpu(), 48000)
+    #         torchaudio.save("./pred/" + self.model + "-" + self.dataset + "/clean"+str(i)+".wav", y_audio.cpu(), 48000)
+    #         torchaudio.save("./pred/" + self.model + "-" + self.dataset + "/pred"+str(i)+".wav", pred_audio.cpu(), 48000)
+            
+        
+    # def on_predict_end(self):
+    #     average_pesqNb = sum(self.pesqNb_scores) / self.total_samples
+    #     average_pesqWb = sum(self.pesqWb_scores) / self.total_samples
+    #     average_snr = sum(self.snr_scores) / self.total_samples
+    #     average_stoi = sum(self.stoi_scores) / self.total_samples
+        
+    #     print("-----------------------------------")
+    #     print("model : "+self.model)
+    #     print("dataset : "+ self.dataset)
+    #     print("-----------------------------------")
+    #     print(f"pesq-nb :{average_pesqNb}")
+    #     print(f"pesq-wb :{average_pesqWb}")
+    #     print(f"snr : {average_snr}")
+    #     print(f"stoi : {average_stoi}")
+    
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-1)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.1)
         return [optimizer], [scheduler]
