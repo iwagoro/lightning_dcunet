@@ -5,17 +5,21 @@ from torchmetrics.audio import SignalNoiseRatio
 from torchmetrics.audio import PerceptualEvaluationSpeechQuality
 from torchmetrics.audio import ShortTimeObjectiveIntelligibility
 from stft import istft
+import os
+from dotenv import load_dotenv
+load_dotenv()
+SMAPLE_RATE = int(os.getenv("SMAPLE_RATE", 16000))
 
-def getPesqList(cleans, preds, N_FFT, HOP_LENGTH,type):
+def getPesqList(cleans, preds,type):
     psq = []
     pesq_metric = PerceptualEvaluationSpeechQuality(16000, type)
     
     for i in range(min(len(cleans), len(preds))):
-        pred = istft(preds[i], N_FFT, HOP_LENGTH)
-        clean = istft(cleans[i], N_FFT, HOP_LENGTH)
+        pred = istft(preds[i])
+        clean = istft(cleans[i])
         
-        clean_resampled = torchaudio.transforms.Resample(48000, 16000)(clean.detach().cpu())
-        pred_resampled = torchaudio.transforms.Resample(48000, 16000)(pred.detach().cpu())
+        clean_resampled = torchaudio.transforms.Resample(SMAPLE_RATE, 16000)(clean.detach().cpu())
+        pred_resampled = torchaudio.transforms.Resample(SMAPLE_RATE, 16000)(pred.detach().cpu())
         
         score = pesq_metric(pred_resampled.flatten(), clean_resampled.flatten())
         if not torch.isinf(score):
@@ -23,16 +27,16 @@ def getPesqList(cleans, preds, N_FFT, HOP_LENGTH,type):
     
     return sum(psq).item()
 
-def getSNRList(cleans, preds, N_FFT, HOP_LENGTH):
+def getSNRList(cleans, preds):
     snr = []
     snr_metric = SignalNoiseRatio()
     
     for i in range(min(len(cleans), len(preds))):
-        pred = istft(preds[i], N_FFT, HOP_LENGTH)
-        clean = istft(cleans[i], N_FFT, HOP_LENGTH)
+        pred = istft(preds[i])
+        clean = istft(cleans[i])
         
-        clean_resampled = torchaudio.transforms.Resample(48000, 16000)(clean.detach().cpu())
-        pred_resampled = torchaudio.transforms.Resample(48000, 16000)(pred.detach().cpu())
+        clean_resampled = torchaudio.transforms.Resample(SMAPLE_RATE, 16000)(clean.detach().cpu())
+        pred_resampled = torchaudio.transforms.Resample(SMAPLE_RATE, 16000)(pred.detach().cpu())
         
         score = snr_metric(pred_resampled.flatten(), clean_resampled.flatten())
         if not torch.isinf(score):
@@ -40,16 +44,16 @@ def getSNRList(cleans, preds, N_FFT, HOP_LENGTH):
     
     return sum(snr).item()
 
-def getSTOIList(cleans,preds,N_FFT,HOP_LENGTH):
+def getSTOIList(cleans,preds):
     stoi = []
     stoi_metric  = ShortTimeObjectiveIntelligibility(16000,False)
     
     for i in range(min(len(cleans), len(preds))):
-        pred = istft(preds[i], N_FFT, HOP_LENGTH)
-        clean = istft(cleans[i], N_FFT, HOP_LENGTH)
+        pred = istft(preds[i])
+        clean = istft(cleans[i])
         
-        clean_resampled = torchaudio.transforms.Resample(48000, 16000)(clean.detach().cpu())
-        pred_resampled = torchaudio.transforms.Resample(48000, 16000)(pred.detach().cpu())
+        clean_resampled = torchaudio.transforms.Resample(SMAPLE_RATE, 16000)(clean.detach().cpu())
+        pred_resampled = torchaudio.transforms.Resample(SMAPLE_RATE, 16000)(pred.detach().cpu())
         
         score = stoi_metric(pred_resampled.flatten(), clean_resampled.flatten())
         if not torch.isinf(score):

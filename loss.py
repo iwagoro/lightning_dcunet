@@ -1,37 +1,56 @@
 import torch
-import torch.nn as nn
-from loss_utils import mse_loss, stftm_loss, reg_loss
+import os
+from torchmetrics.regression import MeanSquaredError
+from stft import stft 
 
-time_loss = mse_loss()
-freq_loss = stftm_loss()
-reg_loss = reg_loss()
 
-SAMPLE_RATE = 48000
-N_FFT = 1022
-HOP_LENGTH = 256
+def tensor_stft(wav):
+    result = []
+    
+    for i in range(len(wav)):
+        wav_stft = stft(wav[i])
+        result.append(wav_stft)
+    
+    result = torch.cat(result,dim=0).unsqueeze(1)
+    return result
 
-def compLossMask(inp, nframes):
-    loss_mask = torch.zeros_like(inp).requires_grad_(False)
-    for j, seq_len in enumerate(nframes):
-        loss_mask.data[j, :, 0:seq_len] += 1.0   # loss_mask.shape: torch.Size([2, 1, 32512])
-    return loss_mask
 
-class RegularizedLoss(nn.Module):
-    def __init__(self, gamma=1):
-        super().__init__()
+def stft_loss(clean,pred):
+    clean_stft = tensor_stft(clean)
+    pred_stft = tensor_stft(pred)
+    
+    size = clean_stft.size()
+    
+    t_length = size[2]
+    f_length = size[3]
+    loss = 0
+    
+    for i in range(len(clean_stft)):
+        clean_r = clean_stft[i][...,0]
+        clean_i = clean_stft[i][...,1]
+        pred_r = pred_stft[i][...,0]
+        pred_i = pred_stft[i][...,1]
 
-        self.gamma = gamma
+        clean_diff = torch.abs(clean_r) + torch.abs(clean_i)
+        pred_diff = torch.abs(pred_r) + torch.abs(pred_i)
 
-    '''
-    def mseloss(self, image, target):
-        x = ((image - target)**2)
-        return torch.mean(x)
-    '''
+        loss += torch.abs(clean_diff - pred_diff)
+    
+    return (torch.sum(loss) / (t_length * f_length))
 
-    def wsdr_fn(self, x_, y_pred_, y_true_, eps=1e-8):  # g1_wav, fg1_wav, g2_wav
-        y_pred = y_pred_.flatten(1)
-        y_true = y_true_.flatten(1)
-        x = x_.flatten(1)
+
+def mse_loss(clean,pred,device):
+    mean_squared_error = MeanSquaredError().to(device)
+    loss = 0
+    for i in range(len(clean)):
+        loss += mean_squared_error(pred[i].flatten(),clean[i].flatten())
+    return loss
+
+
+def wsdr_loss( x, y_pred, y_true, eps=1e-8):  
+        y_pred = y_pred.flatten(1)
+        y_true = y_true.flatten(1)
+        x = x.flatten(1)
 
         def sdr_fn(true, pred, eps=1e-8):
             num = torch.sum(true * pred, dim=1)
@@ -45,21 +64,14 @@ class RegularizedLoss(nn.Module):
         a = torch.sum(y_true ** 2, dim=1) / (torch.sum(y_true ** 2, dim=1) + torch.sum(z_true ** 2, dim=1) + eps)
         wSDR = a * sdr_fn(y_true, y_pred) + (1 - a) * sdr_fn(z_true, z_pred)
         return torch.mean(wSDR)
-
-    def regloss(self, g1, g2, G1, G2):
-        return torch.mean((g1-g2-G1+G2)**2)
-
-    def forward(self, g1_wav, fg1_wav, g2_wav, g1fx, g2fx):
-
-        if(g2_wav.shape[0] == 2):
-            nframes = [g2_wav.shape[2],g2_wav.shape[2]]   # nframes: [32512, 32512]
-        else:
-            nframes = [g2_wav.shape[2]]
-
-        loss_mask = compLossMask(g2_wav, nframes)   
-        loss_mask = loss_mask.float().cuda() 
-        loss_time = time_loss(fg1_wav, g2_wav, loss_mask)
-        loss_freq = freq_loss(fg1_wav, g2_wav, loss_mask)
-        loss1 = (0.8 * loss_time + 0.2 * loss_freq)/600
-
-        return loss1 + self.wsdr_fn(g1_wav, fg1_wav, g2_wav) + self.gamma * self.regloss(fg1_wav, g2_wav, g1fx, g2fx)
+    
+def basic_loss(g1,g2,fg1,device):
+    alpha = 0.8
+    loss_time = mse_loss(fg1,g2,device)
+    loss_freq = stft_loss(fg1,g2)
+    loss = (alpha * loss_time + (1-alpha) * loss_freq) /600 + wsdr_loss(g1,fg1,g2)
+    return loss
+    
+def reg_loss(fg1,g2,gf1,gf2):
+    loss = torch.mean((fg1-g2-(gf1-gf2))**2)
+    return loss

@@ -2,4 +2,10 @@ __pycache__
 checkpoints
 dataset
 tb_logs
+dataset
+lightning_logs
+pred
+tb_logs
 urbansound
+__pycache__
+checkpoints

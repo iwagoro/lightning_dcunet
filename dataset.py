@@ -1,24 +1,14 @@
 import torchaudio
 import torch
 from torch.utils.data import Dataset
-import numpy as np
-from stft import stft, istft
-
-SAMPLE_RATE = 48000
-N_FFT = 1022
-HOP_LENGTH = 256
 
 class SpeechDataset(Dataset):
     
-    def __init__(self, noisy_files, clean_files, n_fft=N_FFT, hop_length=HOP_LENGTH):
+    def __init__(self, noisy_files, clean_files):
         super().__init__()
         # list of files
         self.noisy_files = sorted(noisy_files)
         self.clean_files = sorted(clean_files)
-        
-        # stft parameters
-        self.n_fft = n_fft
-        self.hop_length = hop_length
         
         # len
         self.len = len(self.noisy_files)
@@ -44,7 +34,6 @@ class SpeechDataset(Dataset):
         
         return x_noisy,x_clean
         
-        # return g1_stft,g2_stft
         
         
         
