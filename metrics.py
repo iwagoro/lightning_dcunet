@@ -8,12 +8,11 @@ from stft import istft
 import os
 from dotenv import load_dotenv
 load_dotenv()
-SMAPLE_RATE = int(os.getenv("SMAPLE_RATE", 16000))
+SMAPLE_RATE = int(os.getenv("SAMPLE_RATE", 16000))
 
 def getPesqList(cleans, preds,type):
     psq = []
     pesq_metric = PerceptualEvaluationSpeechQuality(16000, type)
-    
     for i in range(min(len(cleans), len(preds))):
         pred = istft(preds[i])
         clean = istft(cleans[i])

@@ -110,7 +110,9 @@ class DCUnet10_rTSTM(LightningModule):
         
         elif (self.loss_type == "nct"):
             x,y = batch
-            pred = self.forward(x)
+            x_stft = tensor_stft(x)
+            pred = self.forward(x_stft)
+            pred = tensor_istft(pred)
             loss = wsdr_loss(x,pred,y)
             self.log("train_loss", loss, prog_bar=True,sync_dist=True)
             return loss
@@ -134,17 +136,21 @@ class DCUnet10_rTSTM(LightningModule):
     
         elif (self.loss_type == "nct"):
             x,y = batch
-            pred = self.forward(x)
+            x_stft = tensor_stft(x)
+            pred = self.forward(x_stft)
+            pred = tensor_istft(pred)
             loss = wsdr_loss(x,pred,y)
-            self.log("train_loss", loss, prog_bar=True,sync_dist=True)
+            self.log("val_loss", loss, prog_bar=True,sync_dist=True)
             return loss
 
     
     def predict_step(self, batch, batch_idx):
         x,y = batch
+        x = tensor_stft(x)
+        y = tensor_stft(y)
         pred = self.forward(x)
-        pesqNb = getPesqList(pred,"nb")
-        pesqWb = getPesqList(pred,"wb")
+        pesqNb = getPesqList(pred,y,"nb")
+        pesqWb = getPesqList(pred,y,"wb")
         snr = getSNRList(pred,y)
         stoi = getSTOIList(pred,y)
         
@@ -182,7 +188,11 @@ class DCUnet10_rTSTM(LightningModule):
         print(f"snr : {average_snr}")
         print(f"stoi : {average_stoi}")
     
+    
+    # def configure_optimizers(self):
+    #     optimizer = torch.optim.Adam(self.parameters(), lr=8e-4)
+    #     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.1)
+    #     return [optimizer], [scheduler]
+    
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.1)
-        return [optimizer], [scheduler]
+        return torch.optim.Adam(self.parameters(), lr=8e-4)

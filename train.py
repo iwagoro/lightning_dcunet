@@ -43,9 +43,8 @@ def main(args):
         noisy_test_dir = os.getenv("URBAN2_NOISY_TEST")
     else:
         raise ValueError("Invalid dataset. Choose from 'white', 'urban0', 'urban1', 'urban2'.")
-    
-    noisy_train_dir = Path("./dataset/noisy_trainset_28spk_wav/")
-    noisy_test_dir = Path("./dataset/noisy_testset_wav/")
+    noisy_train_dir = Path(noisy_train_dir)
+    noisy_test_dir = Path(noisy_test_dir)
     clean_train_dir = Path("./dataset/clean_trainset_28spk_wav/")
     clean_test_dir = Path("./dataset/clean_testset_wav/")
 
@@ -53,6 +52,7 @@ def main(args):
     train_clean_files = sorted(list(clean_train_dir.rglob('*.wav')))
     test_noisy_files = sorted(list(noisy_test_dir.rglob('*.wav')))
     test_clean_files = sorted(list(clean_test_dir.rglob('*.wav')))
+    
 
     trainset = SpeechDataset(train_noisy_files, train_clean_files)
     testset = SpeechDataset(test_noisy_files, test_clean_files)
@@ -86,15 +86,6 @@ def main(args):
             metrics_text_delimiter="\n",
         )
     )
-    if args.loss != "nct" and args.loss != "nb2nb":
-        raise ValueError("Invalid loss type. Choose from 'nct' or 'nb2nb'")
-    
-    if args.model == 'dcunet':
-        model = DCUnet10(loss_type=args.loss)
-    elif args.model == 'dcunet-rtstm':
-        model = DCUnet10_rTSTM(loss_type=args.loss)
-    else:
-        raise ValueError("Invalid model. Choose from 'dcunet' or 'dcunet-rtstm'.")
 
     early_stopping_callback = EarlyStopping(
         monitor='val_loss',
@@ -104,11 +95,22 @@ def main(args):
     )
 
     if args.mode == 'train':
+        
+        if args.loss != "nct" and args.loss != "nb2nb":
+            raise ValueError("Invalid loss type. Choose from 'nct' or 'nb2nb'")
+
+        if args.model == 'dcunet':
+            model = DCUnet10(loss_type=args.loss)
+        elif args.model == 'dcunet-rtstm':
+            model = DCUnet10_rTSTM(loss_type=args.loss)
+        else:
+            raise ValueError("Invalid model. Choose from 'dcunet' or 'dcunet-rtstm'.")
         trainer = Trainer(
             accelerator="gpu",
-            callbacks=[checkpoint_callback, progress_bar, early_stopping_callback],
+            # callbacks=[checkpoint_callback, progress_bar, early_stopping_callback],
+            callbacks=[checkpoint_callback, progress_bar],
             logger=logger,
-            max_epochs=1000,
+            max_epochs=150,
             strategy=strategy,
             devices=args.devices
         )
@@ -139,7 +141,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Train or predict with DCUnet models.")
     parser.add_argument('--mode', type=str, required=True, help="Mode: 'train' or 'predict'")
     parser.add_argument('--dataset', type=str, required=True, help="Dataset: 'white', 'urban0', 'urban1', 'urban2'")
-    parser.add_argument('--loss',type=str, required=True,help="Loss function: 'nct' or 'nb2nb'")
+    parser.add_argument('--loss',type=str, required=False,help="Loss function: 'nct' or 'nb2nb'")
     parser.add_argument('--model', type=str, required=True, help="Model: 'dcunet' or 'dcunet-rtstm'")
     parser.add_argument('--devices', type=int, nargs='+', default=[0], help="List of GPU devices to use")
     parser.add_argument('--checkpoint', type=str, help="Checkpoint file for prediction")

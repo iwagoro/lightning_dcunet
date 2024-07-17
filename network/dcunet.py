@@ -12,7 +12,7 @@ from subsample import subsample2
 
 
 class DCUnet10(LightningModule):
-    def __init__(self,dataset="",loss_type="nct"):
+    def __init__(self,dataset="",loss_type=""):
         super().__init__()
         
         self.pesqNb_scores = []
@@ -86,13 +86,15 @@ class DCUnet10(LightningModule):
                 f_stft = self.forward(noisy_stft)
                 f = tensor_istft(f_stft)
                 g1f, g2f = subsample2(f,self.device)
-            loss = basic_loss(g1,g2,fg1,self.device)+ reg_loss(fg1,g2,g1f,g2f)
+            loss = basic_loss(g1,g2,fg1,self.device) + self.gamma * reg_loss(fg1,g2,g1f,g2f)
             self.log("train_loss", loss, prog_bar=True, sync_dist=True)
             return loss
         
         elif (self.loss_type == "nct"):
             x,y = batch
-            pred = self.forward(x)
+            x_stft = tensor_stft(x)
+            pred = self.forward(x_stft)
+            pred = tensor_istft(pred)
             loss = wsdr_loss(x,pred,y)
             self.log("train_loss", loss, prog_bar=True,sync_dist=True)
             return loss
@@ -116,18 +118,22 @@ class DCUnet10(LightningModule):
     
         elif (self.loss_type == "nct"):
             x,y = batch
-            pred = self.forward(x)
+            x_stft = tensor_stft(x)
+            pred = self.forward(x_stft)
+            pred = tensor_istft(pred)
             loss = wsdr_loss(x,pred,y)
-            self.log("train_loss", loss, prog_bar=True,sync_dist=True)
+            self.log("val_loss", loss, prog_bar=True,sync_dist=True)
             return loss
     
     def predict_step(self, batch, batch_idx):
         x,y = batch
+        x = tensor_stft(x)
+        y = tensor_stft(y)
         pred = self.forward(x)
-        pesqNb = getPesqList(pred,y,self.n_fft,self.hop_length,"nb")
-        pesqWb = getPesqList(pred,y,self.n_fft,self.hop_length,"wb")
-        snr = getSNRList(pred,y,self.n_fft,self.hop_length)
-        stoi = getSTOIList(pred,y,self.n_fft,self.hop_length)
+        pesqNb = getPesqList(pred,y,"nb")
+        pesqWb = getPesqList(pred,y,"wb")
+        snr = getSNRList(pred,y)
+        stoi = getSTOIList(pred,y)
         
         self.pesqNb_scores.append(pesqNb)
         self.pesqWb_scores.append(pesqWb)
@@ -138,9 +144,9 @@ class DCUnet10(LightningModule):
         # Ensure the 'pred' directory exists
         Path("pred/"+ self.model + "-" + self.dataset).mkdir(parents=True, exist_ok=True)
         for i in range(len(x)):
-            x_audio = istft(x[i], self.n_fft, self.hop_length)
-            y_audio = istft(y[i], self.n_fft, self.hop_length)
-            pred_audio = istft(pred[i], self.n_fft, self.hop_length)
+            x_audio = istft(x[i])
+            y_audio = istft(y[i])
+            pred_audio = istft(pred[i])
             
             # Save the audio files
             torchaudio.save("./pred/" + self.model + "-" + self.dataset + "/noisy"+str(i)+".wav", x_audio.cpu(), 48000)
@@ -164,7 +170,10 @@ class DCUnet10(LightningModule):
         print(f"stoi : {average_stoi}")
     
     
+    # def configure_optimizers(self):
+    #     optimizer = torch.optim.Adam(self.parameters(), lr=8e-4)
+    #     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.1)
+    #     return [optimizer], [scheduler]
+    
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-1)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.1)
-        return [optimizer], [scheduler]
+        return torch.optim.Adam(self.parameters(), lr=8e-4)
